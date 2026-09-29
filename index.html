@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduGenie - AI Learning Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+<div class="container">
+    <header class="hero">
+        <h1>EduGenie</h1>
+        <p>Google Gemini Powered Learning Assistant</p>
+        <p class="subtitle">
+            Ask questions, learn concepts, create quizzes,
+            summarize content, and build learning paths.
+        </p>
+    </header>
+
+    <main class="card">
+        <label for="task">Select Learning Task</label>
+        <select id="task">
+            <option value="qa">Ask a Question</option>
+            <option value="explain">Explain a Concept</option>
+            <option value="quiz">Generate Quiz</option>
+            <option value="summarize">Summarize Text</option>
+            <option value="learn">Create Learning Path</option>
+        </select>
+
+        <label for="level">Learner Level</label>
+        <select id="level">
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+        </select>
+
+        <label for="inputText">Enter your topic or content</label>
+        <textarea id="inputText" rows="8"
+            placeholder="Enter your question, topic, or text here..."></textarea>
+
+        <button id="submitButton" onclick="submitTask()">Generate</button>
+
+        <section id="loading" class="loading hidden">
+            Generating response...
+        </section>
+
+        <section id="resultSection" class="result-section hidden">
+            <div class="result-header">
+                <h2>EduGenie Response</h2>
+                <button class="copy-button" onclick="copyResult()">Copy</button>
+            </div>
+            <div id="result"></div>
+        </section>
+    </main>
+</div>
+
+<script>
+function escapeHtml(value) {
+    return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function showLoading(show) {
+    const loading = document.getElementById("loading");
+    const resultSection = document.getElementById("resultSection");
+
+    if (show) {
+        loading.classList.remove("hidden");
+        resultSection.classList.add("hidden");
+    } else {
+        loading.classList.add("hidden");
+    }
+}
+
+function displayText(text) {
+    return escapeHtml(text).replaceAll("\n", "<br>");
+}
+
+function displayQuiz(quiz) {
+    let html = "";
+
+    quiz.questions.forEach((question, index) => {
+        html += `
+            <div class="quiz-question">
+                <h3>${index + 1}. ${escapeHtml(question.question)}</h3>
+                <ol type="A">
+        `;
+
+        question.options.forEach(option => {
+            html += `<li>${escapeHtml(option)}</li>`;
+        });
+
+        html += `
+                </ol>
+                <p class="answer">
+                    <strong>Answer:</strong>
+                    ${escapeHtml(question.answer)}
+                </p>
+            </div>
+        `;
+    });
+
+    return html;
+}
+
+async function submitTask() {
+    const task = document.getElementById("task").value;
+    const level = document.getElementById("level").value;
+    const input = document.getElementById("inputText").value.trim();
+
+    if (!input) {
+        alert("Please enter a question, topic, or text.");
+        return;
+    }
+
+    const button = document.getElementById("submitButton");
+    button.disabled = true;
+    showLoading(true);
+
+    try {
+        let endpoint;
+        let body;
+
+        if (task === "qa") {
+            endpoint = "/qa";
+            body = { text: input };
+        } else if (task === "explain") {
+            endpoint = "/explain";
+            body = { concept: input, level: level };
+        } else if (task === "quiz") {
+            endpoint = "/quiz";
+            body = { text: input };
+        } else if (task === "summarize") {
+            endpoint = "/summarize";
+            body = { text: input };
+        } else {
+            endpoint = "/learn/recommendations";
+            body = {
+                goal: input,
+                level: level,
+                timeline: "4 weeks"
+            };
+        }
+
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || "Something went wrong.");
+        }
+
+        const result = document.getElementById("result");
+
+        if (task === "qa") {
+            result.innerHTML = displayText(data.answer);
+        } else if (task === "explain") {
+            result.innerHTML = displayText(data.explanation);
+        } else if (task === "quiz") {
+            result.innerHTML = displayQuiz(data.quiz);
+        } else if (task === "summarize") {
+            result.innerHTML = displayText(data.summary);
+        } else {
+            result.innerHTML = displayText(data.learning_path);
+        }
+
+        document.getElementById("resultSection").classList.remove("hidden");
+    } catch (error) {
+        document.getElementById("result").innerHTML =
+            `<p class="error">${escapeHtml(error.message)}</p>`;
+        document.getElementById("resultSection").classList.remove("hidden");
+    } finally {
+        showLoading(false);
+        button.disabled = false;
+    }
+}
+
+async function copyResult() {
+    const result = document.getElementById("result");
+
+    try {
+        await navigator.clipboard.writeText(result.innerText);
+        alert("Result copied!");
+    } catch {
+        alert("Unable to copy the result.");
+    }
+}
+</script>
+</body>
+</html>
